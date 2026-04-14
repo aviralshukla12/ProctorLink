@@ -68,7 +68,6 @@ export default function DashboardLayout({
               <GraduationCap className="h-6 w-6 text-brand-primary" />
               <div className="flex flex-col">
                 <span className="text-brand-dark font-bold">ProctorLink</span>
-                <span className="text-xs text-brand-medium/80 font-medium -mt-1">Powered by LogikSutra AI</span>
               </div>
             </Link>
           </div>
@@ -159,7 +158,6 @@ export default function DashboardLayout({
                   <GraduationCap className="h-6 w-6 text-brand-primary" />
                   <div className="flex flex-col">
                     <span className="text-brand-dark font-bold">ProctorLink</span>
-                    <span className="text-xs text-brand-medium/80 font-medium -mt-1">LogikSutra AI</span>
                   </div>
                 </Link>
                 <Link

@@ -52,11 +52,6 @@ export function Logo({ className, showText = true, size = 'md' }: LogoProps) {
           <span className={cn("font-bold text-brand-dark", textSizeClasses[size])}>
             ProctorLink
           </span>
-          {size !== 'sm' && (
-            <span className="text-xs text-brand-medium/80 font-medium -mt-1">
-              Powered by LogikSutra AI
-            </span>
-          )}
         </div>
       )}
     </div>

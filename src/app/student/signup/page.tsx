@@ -141,7 +141,6 @@ export default function StudentSignUpPage() {
             <GraduationCap className="w-12 h-12 text-brand-primary mb-2" />
             <div className="text-center">
               <div className="text-xl font-bold text-brand-dark">ProctorLink</div>
-              <div className="text-xs text-brand-medium/80 font-medium">Powered by LogikSutra AI Recruitment</div>
             </div>
           </div>
           <CardTitle className="text-2xl text-center">Create Student Account</CardTitle>

@@ -33,14 +33,14 @@ export function Logo({ className, showText = true, size = 'md' }: LogoProps) {
           <circle cx="22" cy="14" r="1" fill="white"/>
           
           {/* Proctor/security element */}
-          <circle cx="6" cy="6" r="3" fill="#B2B0E8" opacity="0.8"/>
+          <circle cx="6" cy="6" r="3" fill="#DDD6FE" opacity="0.8"/>
           <circle cx="6" cy="6" r="1.5" fill="white"/>
           
           {/* Define gradient */}
           <defs>
             <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#3B38A0" stopOpacity="1" />
-              <stop offset="100%" stopColor="#1A2A80" stopOpacity="1" />
+              <stop offset="0%" stopColor="#7C3AED" stopOpacity="1" />
+              <stop offset="100%" stopColor="#3B0764" stopOpacity="1" />
             </linearGradient>
           </defs>
         </svg>

@@ -1,18 +1,26 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, setLogLevel } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
+
+// Suppress ALL Firestore gRPC reconnection noise in Node.js/Next.js server
+// These are non-fatal — the SDK auto-reconnects successfully
+try {
+  setLogLevel('silent');
+} catch (e) {
+  // Ignore if already set
+}
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyCxNrPzv3KY5CIAj275BOaJbBmuhzRTEmc",
-  authDomain: "steel-ridge-437016-h3.firebaseapp.com",
-  projectId: "steel-ridge-437016-h3",
-  storageBucket: "steel-ridge-437016-h3.firebasestorage.app",
-  messagingSenderId: "468926585357",
-  appId: "1:468926585357:web:bf1d70991b3e52d405d344",
-  measurementId: "G-4SDK14BP5Y"
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 };
 
 // Initialize Firebase

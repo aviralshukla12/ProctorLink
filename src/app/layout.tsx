@@ -3,6 +3,8 @@ import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider } from '@/context/AuthContext';
 
+import { ThemeProvider } from "@/components/theme-provider";
+
 export const metadata: Metadata = {
   title: 'ProctorLink',
   description: 'Advanced online proctoring platform for secure exams. Intelligent exam creation, AI-powered proctoring, and comprehensive analytics.',
@@ -58,10 +60,17 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-title" content="ProctorLink" />
       </head>
       <body className="font-body antialiased">
-        <AuthProvider>
-          {children}
-          <Toaster />
-        </AuthProvider>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <AuthProvider>
+            {children}
+            <Toaster />
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -1,27 +1,28 @@
 'use server';
 
 /**
- * @fileOverview AI flows for resume review and chat using LangChain and Gemini
+ * @fileOverview AI flows for resume review and chat using Groq SDK
  */
 
-import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
-import { HumanMessage, AIMessage, SystemMessage } from '@langchain/core/messages';
-import { StringOutputParser } from '@langchain/core/output_parsers';
-import { RunnableSequence } from '@langchain/core/runnables';
+import Groq from 'groq-sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { getPineconeIndex, PINECONE_DIMENSIONS } from '@/lib/pinecone';
 import { getResumeReview } from '@/lib/resume';
 
 // Lazy initialization functions
-function getApiKey(): string {
-  // Check multiple possible environment variable names
-  const apiKey = process.env.GOOGLE_GENAI_API_KEY 
-    || process.env.GOOGLE_API_KEY 
-    || process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error('GOOGLE_GENAI_API_KEY, GOOGLE_API_KEY, or GEMINI_API_KEY environment variable is not set. Please add it to your .env.local file.');
+function getGroqApiKey(): string {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey || apiKey === 'gsk_your_actual_groq_key_here') {
+    throw new Error('GROQ_API_KEY environment variable is not set correctly. Please add your actual Groq key to your .env file.');
   }
-  return apiKey.trim(); // Remove any whitespace
+  return apiKey.trim();
+}
+
+function getGeminiApiKey(): string | null {
+  return process.env.GOOGLE_GENAI_API_KEY 
+    || process.env.GOOGLE_API_KEY 
+    || process.env.GEMINI_API_KEY 
+    || null;
 }
 
 /**
@@ -33,35 +34,32 @@ function normalizeEmbedding(embedding: number[], targetDimensions: number): numb
   }
   
   if (embedding.length < targetDimensions) {
-    // Pad with zeros or repeat pattern
     const padding = new Array(targetDimensions - embedding.length).fill(0);
     return [...embedding, ...padding];
   }
   
-  // Truncate if larger
   return embedding.slice(0, targetDimensions);
 }
 
-// Lazy initialization for chat model
-let chatModel: ChatGoogleGenerativeAI | null = null;
-function getChatModel(): ChatGoogleGenerativeAI {
-  if (!chatModel) {
-    // Use gemini-2.5-flash-lite for better performance and free tier availability
-    chatModel = new ChatGoogleGenerativeAI({
-      model: 'gemini-2.5-flash-lite',
-      temperature: 0.7,
-      apiKey: getApiKey(),
-      maxRetries: 3,
+// Lazy initialization for Groq client
+let groqClient: Groq | null = null;
+function getGroqClient(): Groq {
+  if (!groqClient) {
+    groqClient = new Groq({
+      apiKey: getGroqApiKey(),
     });
   }
-  return chatModel;
+  return groqClient;
 }
 
 // Lazy initialization for embeddings
 let genAI: GoogleGenerativeAI | null = null;
-function getGenAI(): GoogleGenerativeAI {
+function getGenAI(): GoogleGenerativeAI | null {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) return null;
+  
   if (!genAI) {
-    genAI = new GoogleGenerativeAI(getApiKey());
+    genAI = new GoogleGenerativeAI(apiKey);
   }
   return genAI;
 }
@@ -73,43 +71,41 @@ export async function generateResumeEmbedding(text: string): Promise<number[]> {
   try {
     const ai = getGenAI();
     
-    // Use the embedding model - text-embedding-004
-    // Google Generative AI SDK embedding API
-    try {
-      const embeddingModel = ai.getGenerativeModel({ model: 'text-embedding-004' });
-      const result = await embeddingModel.embedContent(text);
-      
-      let embedding: number[] = [];
-      
-      // The embedding is in result.embedding.values
-      if (result.embedding && result.embedding.values) {
-        embedding = Array.from(result.embedding.values);
-      } else if (result.embedding && Array.isArray(result.embedding)) {
-        embedding = Array.from(result.embedding);
-      } else if ('values' in result && Array.isArray((result as any).values)) {
-        embedding = Array.from((result as any).values);
-      }
-      
-      if (embedding.length > 0) {
-        // Normalize to match Pinecone dimensions (3072)
-        return normalizeEmbedding(embedding, PINECONE_DIMENSIONS);
-      }
-    } catch (apiError: any) {
-      console.error('Error with embedding API:', apiError);
-      // Try alternative API format
+    // If we have a Gemini API key, use it for embeddings
+    if (ai) {
       try {
-        const embeddingModel = ai.getGenerativeModel({ model: 'models/text-embedding-004' });
+        const embeddingModel = ai.getGenerativeModel({ model: 'text-embedding-004' });
         const result = await embeddingModel.embedContent(text);
+        
+        let embedding: number[] = [];
+        
         if (result.embedding && result.embedding.values) {
-          const embedding = Array.from(result.embedding.values);
+          embedding = Array.from(result.embedding.values);
+        } else if (result.embedding && Array.isArray(result.embedding)) {
+          embedding = Array.from(result.embedding);
+        } else if ('values' in result && Array.isArray((result as any).values)) {
+          embedding = Array.from((result as any).values);
+        }
+        
+        if (embedding.length > 0) {
           return normalizeEmbedding(embedding, PINECONE_DIMENSIONS);
         }
-      } catch (altError) {
-        console.error('Alternative embedding API also failed:', altError);
+      } catch (apiError: any) {
+        console.error('Error with embedding API:', apiError);
+        try {
+          const embeddingModel = ai.getGenerativeModel({ model: 'models/text-embedding-004' });
+          const result = await embeddingModel.embedContent(text);
+          if (result.embedding && result.embedding.values) {
+            const embedding = Array.from(result.embedding.values);
+            return normalizeEmbedding(embedding, PINECONE_DIMENSIONS);
+          }
+        } catch (altError) {
+          console.error('Alternative embedding API also failed:', altError);
+        }
       }
     }
     
-    // Fallback: Use a simple hash-based embedding (padded to 3072 dimensions)
+    // Fallback: Use a simple hash-based embedding
     const hashEmbedding = new Array(768).fill(0);
     for (let i = 0; i < text.length && i < 768; i++) {
       hashEmbedding[i] = (text.charCodeAt(i) % 100) / 100;
@@ -118,7 +114,6 @@ export async function generateResumeEmbedding(text: string): Promise<number[]> {
     return normalizeEmbedding(hashEmbedding, PINECONE_DIMENSIONS);
   } catch (error) {
     console.error('Error generating embedding:', error);
-    // Return a simple embedding as fallback (3072 dimensions)
     return normalizeEmbedding(
       new Array(768).fill(0).map(() => Math.random() * 0.01),
       PINECONE_DIMENSIONS
@@ -130,7 +125,6 @@ export async function generateResumeEmbedding(text: string): Promise<number[]> {
  * Analyze resume and provide review
  */
 export async function analyzeResume(resumeText: string): Promise<string> {
-  // Limit text to 8000 characters for faster processing (1-3 page resumes)
   const maxReviewLength = 8000;
   const textToReview = resumeText.length > maxReviewLength 
     ? resumeText.substring(0, maxReviewLength) + '\n\n[... Resume continues ...]'
@@ -146,18 +140,18 @@ export async function analyzeResume(resumeText: string): Promise<string> {
 
 Be constructive, specific, and encouraging. Format your response in clear sections with markdown. Keep the review concise but thorough.`;
 
-  const model = getChatModel();
-  const chain = RunnableSequence.from([
-    model,
-    new StringOutputParser(),
-  ]);
+  const client = getGroqClient();
+  const chatCompletion = await client.chat.completions.create({
+    model: 'llama-3.3-70b-versatile',
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: `Please review this resume (1-3 pages):\n\n${textToReview}` },
+    ],
+    temperature: 0.7,
+    max_tokens: 4096,
+  });
 
-  const response = await chain.invoke([
-    new SystemMessage(systemPrompt),
-    new HumanMessage(`Please review this resume (1-3 pages):\n\n${textToReview}`),
-  ]);
-
-  return response;
+  return chatCompletion.choices[0]?.message?.content || 'Unable to generate review.';
 }
 
 /**
@@ -168,23 +162,18 @@ export async function chatWithResume(
   userMessage: string,
   chatHistory: Array<{ role: 'user' | 'assistant'; content: string }>
 ): Promise<string> {
-  // Get resume from Firestore
   const resume = await getResumeReview(resumeId);
   if (!resume) {
     throw new Error('Resume not found');
   }
 
-  // Retrieve relevant context from Pinecone (if indexed)
   let resumeContext = '';
   
   if (resume.pineconeIndexed) {
     try {
       const index = await getPineconeIndex();
-      
-      // Generate query embedding for semantic search
       const queryEmbedding = await generateResumeEmbedding(userMessage);
       
-      // Query Pinecone for relevant chunks
       const queryResponse = await index.query({
         vector: queryEmbedding,
         topK: 3,
@@ -194,7 +183,6 @@ export async function chatWithResume(
         },
       });
       
-      // Extract relevant text chunks
       const relevantChunks = queryResponse.matches
         .map(match => (match.metadata?.text as string) || '')
         .filter(Boolean);
@@ -202,11 +190,9 @@ export async function chatWithResume(
       resumeContext = relevantChunks.join('\n\n') || resume.parsedText.substring(0, 2000);
     } catch (error) {
       console.error('Error querying Pinecone:', error);
-      // Fallback to direct resume text
       resumeContext = resume.parsedText.substring(0, 2000);
     }
   } else {
-    // Use resume text directly if not indexed
     resumeContext = resume.parsedText.substring(0, 2000);
   }
 
@@ -217,24 +203,25 @@ ${resumeContext}
 
 Answer questions based on the resume content. Be helpful, specific, and actionable. If asked about something not in the resume, say so but still provide helpful general advice.`;
 
-  // Build message history
-  const messages = [
-    new SystemMessage(systemPrompt),
-    ...chatHistory.map(msg => 
-      msg.role === 'user' 
-        ? new HumanMessage(msg.content)
-        : new AIMessage(msg.content)
-    ),
-    new HumanMessage(userMessage),
+  // Build message history for Groq
+  const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+    { role: 'system', content: systemPrompt },
+    ...chatHistory.map(msg => ({
+      role: msg.role as 'user' | 'assistant',
+      content: msg.content,
+    })),
+    { role: 'user', content: userMessage },
   ];
 
-  const chain = RunnableSequence.from([
-    getChatModel(),
-    new StringOutputParser(),
-  ]);
+  const client = getGroqClient();
+  const chatCompletion = await client.chat.completions.create({
+    model: 'llama-3.3-70b-versatile',
+    messages,
+    temperature: 0.7,
+    max_tokens: 4096,
+  });
 
-  const response = await chain.invoke(messages);
-  return response;
+  return chatCompletion.choices[0]?.message?.content || 'Unable to generate response.';
 }
 
 /**

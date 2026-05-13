@@ -84,9 +84,12 @@ export async function getResumeReview(resumeId: string): Promise<ResumeReview | 
     return null;
   }
 
+  const data = resumeSnap.data();
   return {
     id: resumeSnap.id,
-    ...resumeSnap.data(),
+    ...data,
+    createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : data.createdAt,
+    updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : data.updatedAt,
   } as ResumeReview;
 }
 
@@ -100,17 +103,20 @@ export async function getUserResumeReviews(userId: string): Promise<ResumeReview
   );
 
   const querySnapshot = await getDocs(q);
-  const resumes = querySnapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data(),
-  })) as ResumeReview[];
+  const resumes = querySnapshot.docs.map(doc => {
+    const data = doc.data();
+    return {
+      id: doc.id,
+      ...data,
+      createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : data.createdAt,
+      updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+    };
+  }) as ResumeReview[];
   
   // Sort by createdAt descending
   return resumes.sort((a, b) => {
-    const aTime = a.createdAt instanceof Date ? a.createdAt.getTime() : 
-                  (a.createdAt as Timestamp)?.toMillis() || 0;
-    const bTime = b.createdAt instanceof Date ? b.createdAt.getTime() : 
-                  (b.createdAt as Timestamp)?.toMillis() || 0;
+    const aTime = new Date(a.createdAt as string | Date).getTime();
+    const bTime = new Date(b.createdAt as string | Date).getTime();
     return bTime - aTime;
   });
 }
@@ -193,17 +199,19 @@ export async function getResumeChatMessages(resumeId: string): Promise<ResumeCha
   );
 
   const querySnapshot = await getDocs(q);
-  const messages = querySnapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data(),
-  })) as ResumeChatMessage[];
+  const messages = querySnapshot.docs.map(doc => {
+    const data = doc.data();
+    return {
+      id: doc.id,
+      ...data,
+      createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : data.createdAt,
+    };
+  }) as ResumeChatMessage[];
   
   // Sort by createdAt ascending
   return messages.sort((a, b) => {
-    const aTime = a.createdAt instanceof Date ? a.createdAt.getTime() : 
-                  (a.createdAt as Timestamp)?.toMillis() || 0;
-    const bTime = b.createdAt instanceof Date ? b.createdAt.getTime() : 
-                  (b.createdAt as Timestamp)?.toMillis() || 0;
+    const aTime = new Date(a.createdAt as string | Date).getTime();
+    const bTime = new Date(b.createdAt as string | Date).getTime();
     return aTime - bTime;
   });
 }

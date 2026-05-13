@@ -2,34 +2,8 @@
  * @fileOverview Resume parsing utilities
  */
 
-// Use dynamic import for pdf-parse to handle ESM/CJS compatibility
-let pdfParseModule: any = null;
+// Use dynamic import for mammoth
 let mammothModule: any = null;
-
-async function getPdfParse() {
-  if (!pdfParseModule) {
-    const module = await import('pdf-parse');
-    // pdf-parse exports differently in different environments
-    // Try multiple ways to get the function
-    pdfParseModule = module.default || 
-                     (typeof module === 'function' ? module : null) ||
-                     (module as any).pdfParse ||
-                     module;
-    
-    // If still not a function, try accessing the actual export
-    if (typeof pdfParseModule !== 'function' && module) {
-      // Check if it's wrapped in an object
-      const keys = Object.keys(module);
-      for (const key of keys) {
-        if (typeof (module as any)[key] === 'function') {
-          pdfParseModule = (module as any)[key];
-          break;
-        }
-      }
-    }
-  }
-  return pdfParseModule;
-}
 
 async function getMammoth() {
   if (!mammothModule) {
@@ -52,13 +26,9 @@ export interface ParsedResume {
  */
 export async function parsePDFResume(fileBuffer: Buffer, fileName: string): Promise<ParsedResume> {
   try {
-    const pdfParse = await getPdfParse();
-    
-    // Ensure pdfParse is a function
-    if (typeof pdfParse !== 'function') {
-      throw new Error('pdfParse is not a function. Module structure: ' + JSON.stringify(Object.keys(pdfParse || {})));
-    }
-    
+    // pdf-parse is externalized via next.config.ts serverExternalPackages
+    // so Node.js loads it natively, bypassing Turbopack bundling issues
+    const pdfParse = require('pdf-parse');
     const data = await pdfParse(fileBuffer);
     
     return {
@@ -69,7 +39,8 @@ export async function parsePDFResume(fileBuffer: Buffer, fileName: string): Prom
         fileSize: fileBuffer.length,
       },
     };
-  } catch (error) {
+  } catch (error: any) {
+    console.error('PDF parse error details:', error?.message || error);
     throw new Error(`Failed to parse PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }

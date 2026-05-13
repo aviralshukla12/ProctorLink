@@ -66,11 +66,25 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils';
 import { Calendar } from '@/components/ui/calendar';
 
+interface TestCase {
+  input: string;
+  output: string;
+}
+
 interface Question {
   id: string;
+  type: 'mcq' | 'coding';
   questionText: string;
-  options: string[];
-  correctAnswer: string;
+  // MCQ fields
+  options?: string[];
+  correctAnswer?: string;
+  // Coding fields
+  problemStatement?: string;
+  starterCode?: string;
+  sampleInput?: string;
+  sampleOutput?: string;
+  testCases?: TestCase[];
+  // Common fields
   timeLimit?: number;
 }
 
@@ -95,14 +109,20 @@ export default function CreateExamPage() {
   const [isGeneratingDesc, setIsGeneratingDesc] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  const addQuestion = () => {
+  const addQuestion = (type: 'mcq' | 'coding' = 'mcq') => {
     setQuestions([
       ...questions,
       {
         id: `q-${Date.now()}`,
-        questionText: '',
-        options: ['', '', '', ''],
+        type,
+        questionText: type === 'mcq' ? '' : 'New Coding Problem',
+        options: type === 'mcq' ? ['', '', '', ''] : undefined,
         correctAnswer: '',
+        problemStatement: type === 'coding' ? '' : undefined,
+        starterCode: type === 'coding' ? '// Write your code here' : undefined,
+        sampleInput: type === 'coding' ? '' : undefined,
+        sampleOutput: type === 'coding' ? '' : undefined,
+        testCases: type === 'coding' ? [{ input: '', output: '' }] : undefined,
         timeLimit: 60, // Default 60 seconds
       },
     ]);
@@ -150,6 +170,7 @@ export default function CreateExamPage() {
       const result = await generateExamQuestions({ topic, difficulty, numberOfQuestions });
       const newQuestions: Question[] = result.questions.map((q, index) => ({
         id: `ai-q-${Date.now()}-${index}`,
+        type: 'mcq',
         questionText: q.questionText,
         options: q.options,
         correctAnswer: q.correctAnswer,
@@ -216,7 +237,9 @@ export default function CreateExamPage() {
             title: examTitle,
             description: examDescription,
             tags: tags.split(',').map(tag => tag.trim()).filter(Boolean),
-            questions: questions.map(({id, ...rest}) => rest), // remove temporary id
+            questions: questions.map(({id, ...rest}) => 
+              Object.fromEntries(Object.entries(rest).filter(([_, v]) => v !== undefined))
+            ), // remove temporary id and undefined fields
             timeLimit: perQuestionTimer ? null : timeLimit,
             perQuestionTimer,
             allowedAttempts,
@@ -333,25 +356,84 @@ export default function CreateExamPage() {
                             <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                      </div>
-                      <Textarea id={`q-text-${q.id}`} placeholder="Enter your question" value={q.questionText} onChange={e => handleQuestionChange(q.id, 'questionText', e.target.value)} />
-                      <div className="grid grid-cols-2 gap-4 mt-4">
-                        {q.options.map((opt, optIndex) => (
-                          <Input key={optIndex} placeholder={`Option ${optIndex + 1}`} value={opt} onChange={e => handleOptionChange(q.id, optIndex, e.target.value)}/>
-                        ))}
-                      </div>
-                      <div className="mt-4">
-                        <Label>Correct Answer</Label>
-                        <Select onValueChange={(value) => handleCorrectAnswerChange(q.id, value)} value={q.correctAnswer}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Select correct answer" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {q.options.filter(o => o.trim() !== '').map((opt, optIndex) => (
-                                    <SelectItem key={optIndex} value={opt}>{opt}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                      </div>
+                      {q.type === 'mcq' ? (
+                        <>
+                          <Textarea id={`q-text-${q.id}`} placeholder="Enter your question" value={q.questionText} onChange={e => handleQuestionChange(q.id, 'questionText', e.target.value)} />
+                          <div className="grid grid-cols-2 gap-4 mt-4">
+                            {q.options?.map((opt, optIndex) => (
+                              <Input key={optIndex} placeholder={`Option ${optIndex + 1}`} value={opt} onChange={e => handleOptionChange(q.id, optIndex, e.target.value)}/>
+                            ))}
+                          </div>
+                          <div className="mt-4">
+                            <Label>Correct Answer</Label>
+                            <Select onValueChange={(value) => handleCorrectAnswerChange(q.id, value)} value={q.correctAnswer || ''}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select correct answer" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {q.options?.filter(o => o.trim() !== '').map((opt, optIndex) => (
+                                        <SelectItem key={optIndex} value={opt}>{opt}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="space-y-4">
+                           <div className="grid gap-2">
+                             <Label>Problem Title</Label>
+                             <Input placeholder="e.g. Two Sum" value={q.questionText} onChange={e => handleQuestionChange(q.id, 'questionText', e.target.value)} />
+                           </div>
+                           <div className="grid gap-2">
+                             <Label>Problem Statement</Label>
+                             <Textarea className="min-h-[100px]" placeholder="Describe the coding problem here..." value={q.problemStatement || ''} onChange={e => handleQuestionChange(q.id, 'problemStatement', e.target.value)} />
+                           </div>
+                           <div className="grid grid-cols-2 gap-4">
+                             <div className="grid gap-2">
+                               <Label>Sample Input</Label>
+                               <Textarea placeholder="e.g. 2, 7, 11, 15\n9" value={q.sampleInput || ''} onChange={e => handleQuestionChange(q.id, 'sampleInput', e.target.value)} />
+                             </div>
+                             <div className="grid gap-2">
+                               <Label>Sample Output</Label>
+                               <Textarea placeholder="e.g. [0, 1]" value={q.sampleOutput || ''} onChange={e => handleQuestionChange(q.id, 'sampleOutput', e.target.value)} />
+                             </div>
+                           </div>
+                           <div className="grid gap-2">
+                             <Label>Starter Code (Optional)</Label>
+                             <Textarea className="font-mono text-sm" placeholder="function solve(input) {\n\n}" value={q.starterCode || ''} onChange={e => handleQuestionChange(q.id, 'starterCode', e.target.value)} />
+                           </div>
+                           <div className="grid gap-2">
+                             <Label>Hidden Test Cases</Label>
+                             {q.testCases?.map((tc, tcIndex) => (
+                               <div key={tcIndex} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
+                                 <Input placeholder="Input" value={tc.input} onChange={e => {
+                                   const newCases = [...(q.testCases || [])];
+                                   newCases[tcIndex].input = e.target.value;
+                                   handleQuestionChange(q.id, 'testCases', newCases);
+                                 }} />
+                                 <Input placeholder="Expected Output" value={tc.output} onChange={e => {
+                                   const newCases = [...(q.testCases || [])];
+                                   newCases[tcIndex].output = e.target.value;
+                                   handleQuestionChange(q.id, 'testCases', newCases);
+                                 }} />
+                                 <Button variant="ghost" size="icon" onClick={() => {
+                                   const newCases = q.testCases?.filter((_, i) => i !== tcIndex);
+                                   handleQuestionChange(q.id, 'testCases', newCases);
+                                 }}>
+                                   <Trash2 className="h-4 w-4 text-destructive" />
+                                 </Button>
+                               </div>
+                             ))}
+                             <Button variant="outline" size="sm" className="w-fit mt-2" onClick={() => {
+                               const newCases = [...(q.testCases || []), { input: '', output: '' }];
+                               handleQuestionChange(q.id, 'testCases', newCases);
+                             }}>
+                               <PlusCircle className="mr-2 h-3 w-3" /> Add Test Case
+                             </Button>
+                           </div>
+                        </div>
+                      )}
+                      
                       {perQuestionTimer && (
                          <div className="mt-4">
                             <Label htmlFor={`q-time-${q.id}`} className="flex items-center"><Clock className="mr-2 h-4 w-4" />Time Limit (seconds)</Label>
@@ -360,11 +442,16 @@ export default function CreateExamPage() {
                       )}
                   </Card>
                 ))}
-                <div className="flex gap-2 pt-4">
-                    <Button onClick={addQuestion} variant="outline" className="w-full">
-                    <PlusCircle className="mr-2 h-4 w-4" /> Add Question
+                <div className="flex flex-col sm:flex-row gap-2 pt-4">
+                    <Button onClick={() => addQuestion('mcq')} variant="outline" className="w-full">
+                      <PlusCircle className="mr-2 h-4 w-4" /> Add MCQ
                     </Button>
-                    <AiQuestionGenerator onGenerate={handleAiGenerateQuestions} isGenerating={isGenerating} />
+                    <Button onClick={() => addQuestion('coding')} variant="outline" className="w-full border-brand-primary text-brand-primary">
+                      <PlusCircle className="mr-2 h-4 w-4" /> Add Coding Question
+                    </Button>
+                    <div className="w-full">
+                      <AiQuestionGenerator onGenerate={handleAiGenerateQuestions} isGenerating={isGenerating} />
+                    </div>
                 </div>
               </CardContent>
             </Card>

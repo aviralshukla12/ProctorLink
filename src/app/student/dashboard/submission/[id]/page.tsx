@@ -203,31 +203,40 @@ export default function SubmissionDetailsPage() {
                     </div>
                     
                     <div className="space-y-2">
-                      {question.options.map((option, optIndex) => {
-                        const isUserChoice = option === userAnswer;
-                        const isCorrectChoice = option === question.correctAnswer;
-                        let variant = 'outline';
-                        let label = option;
+                      {question.options ? (
+                        question.options.map((option, optIndex) => {
+                          const isUserChoice = option === userAnswer;
+                          const isCorrectChoice = option === question.correctAnswer;
+                          let variant = 'outline';
+                          let label = option;
 
-                        if (isCorrectChoice) {
-                          variant = 'default';
-                          label = `✓ ${option} (Correct Answer)`;
-                        }
-                        if (isUserChoice && !isCorrect) {
-                          variant = 'destructive';
-                          label = `✗ ${option} (Your Answer)`;
-                        }
+                          if (isCorrectChoice) {
+                            variant = 'default';
+                            label = `✓ ${option} (Correct Answer)`;
+                          }
+                          if (isUserChoice && !isCorrect) {
+                            variant = 'destructive';
+                            label = `✗ ${option} (Your Answer)`;
+                          }
 
-                        return (
-                          <Badge
-                            key={optIndex}
-                            variant={variant as any}
-                            className="w-full justify-start p-3 text-sm font-normal"
-                          >
-                            {label}
-                          </Badge>
-                        );
-                      })}
+                          return (
+                            <Badge
+                              key={optIndex}
+                              variant={variant as any}
+                              className="w-full justify-start p-3 text-sm font-normal"
+                            >
+                              {label}
+                            </Badge>
+                          );
+                        })
+                      ) : (
+                        <div className="p-4 bg-muted/50 rounded-md">
+                          <p className="text-sm text-muted-foreground mb-2">Submitted Code / Answer:</p>
+                          <pre className="text-sm font-mono whitespace-pre-wrap">
+                            {userAnswer || 'No answer provided'}
+                          </pre>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>

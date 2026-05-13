@@ -22,12 +22,12 @@ export default {
         code: ['monospace'],
       },
       colors: {
-        // Custom brand colors
+        // Custom brand colors (Beautiful Violet Theme)
         brand: {
-          'dark': '#1A2A80',      // Primary dark blue
-          'primary': '#3B38A0',    // Primary purple-blue
-          'medium': '#7A85C1',     // Medium blue-purple
-          'light': '#B2B0E8',      // Light lavender
+          'dark': '#3B0764',      // Purple 900
+          'primary': '#7C3AED',   // Violet 600
+          'medium': '#A78BFA',    // Violet 400
+          'light': '#DDD6FE',     // Violet 200
         },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",

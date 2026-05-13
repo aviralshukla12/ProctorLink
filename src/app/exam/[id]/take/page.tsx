@@ -8,6 +8,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/componen
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Play } from 'lucide-react';
+import Editor from '@monaco-editor/react';
+import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   AlertDialog,
@@ -27,11 +31,30 @@ import { doc, getDoc, collection, addDoc, serverTimestamp } from 'firebase/fires
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 
+interface TestCase {
+  input: string;
+  output: string;
+}
+
+interface TestCaseResult {
+  input: string;
+  expectedOutput: string;
+  actualOutput: string;
+  status: string;
+  passed: boolean;
+}
+
 interface Question {
+    type?: 'mcq' | 'coding';
     questionText: string;
-    options: string[];
-    correctAnswer: string;
+    options?: string[];
+    correctAnswer?: string;
     timeLimit?: number;
+    problemStatement?: string;
+    starterCode?: string;
+    sampleInput?: string;
+    sampleOutput?: string;
+    testCases?: TestCase[];
 }
 
 interface Exam {
@@ -61,6 +84,10 @@ export default function TakeExamPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasCameraPermission, setHasCameraPermission] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [testCaseResults, setTestCaseResults] = useState<TestCaseResult[] | null>(null);
+  const [selectedTestCase, setSelectedTestCase] = useState<number>(0);
+  const [selectedLanguage, setSelectedLanguage] = useState(63); // 63 is JavaScript in Judge0
   const videoRef = useRef<HTMLVideoElement>(null);
   
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -72,8 +99,9 @@ export default function TakeExamPage() {
       if(timerRef.current) clearInterval(timerRef.current);
       
       let score = 0;
+      // We will perform basic scoring here for MCQ, and auto-grade coding async later
       exam.questions.forEach((q, index) => {
-          if(q.correctAnswer === answers[index]){
+          if((q.type === 'mcq' || !q.type) && q.correctAnswer === answers[index]){
               score++;
           }
       });
@@ -125,21 +153,103 @@ export default function TakeExamPage() {
   
   const goToQuestion = (index: number) => {
     if (exam && index >= 0 && index < exam.questions.length) {
+      setTestCaseResults(null);
       setCurrentQuestionIndex(index);
     }
   };
 
   const handleNext = () => {
     if (exam && currentQuestionIndex < exam.questions.length - 1) {
+        setTestCaseResults(null);
         setCurrentQuestionIndex(prev => prev + 1);
     }
   };
 
   const handlePrev = () => {
       if(currentQuestionIndex > 0){
+          setTestCaseResults(null);
           setCurrentQuestionIndex(prev => prev - 1);
       }
   }
+
+  const runCode = async () => {
+    const code = answers[currentQuestionIndex];
+    if (!code) {
+      toast({ title: "No Code", description: "Please write some code before running.", variant: "destructive" });
+      return;
+    }
+    const q = exam?.questions[currentQuestionIndex];
+    if (!q) return;
+
+    setIsExecuting(true);
+    setTestCaseResults(null);
+    setSelectedTestCase(0);
+    
+    const tcs = [];
+    if (q.sampleInput || q.sampleOutput) {
+       tcs.push({ input: q.sampleInput || '', output: q.sampleOutput || '' });
+    }
+    if (q.testCases && q.testCases.length > 0) {
+       tcs.push(...q.testCases);
+    }
+    if (tcs.length === 0) {
+       tcs.push({ input: '', output: '' });
+    }
+
+    try {
+      const results = [];
+      for (const tc of tcs) {
+        const res = await fetch('/api/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            source_code: code,
+            language_id: selectedLanguage,
+            stdin: tc.input,
+            expected_output: tc.output
+          })
+        });
+        const data = await res.json();
+        
+        let output = '';
+        let passed = false;
+        let status = 'Error';
+        
+        if (data.error) {
+          status = 'Error';
+          output = data.error;
+        } else if (data.message) {
+          status = 'API Error';
+          output = data.message;
+        } else {
+          output = [data.stdout, data.compile_output, data.stderr]
+            .filter(Boolean)
+            .join('\n')
+            .trim();
+          status = data.status?.description || 'Done';
+          passed = status.includes('Accepted');
+        }
+        
+        results.push({
+          input: tc.input,
+          expectedOutput: tc.output,
+          actualOutput: output || 'No output produced.',
+          status,
+          passed
+        });
+
+        // Add a delay to avoid hitting rate limits (Judge0 Basic is 1 req/sec)
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      }
+      
+      setTestCaseResults(results);
+    } catch (err) {
+      console.error(err);
+      toast({ title: "Execution Failed", description: "Failed to connect to execution server.", variant: "destructive" });
+    } finally {
+      setIsExecuting(false);
+    }
+  };
 
   const toggleBookmark = (questionIndex: number) => {
     setBookmarkedQuestions(prev => {
@@ -412,7 +522,7 @@ export default function TakeExamPage() {
               </CardContent>
           </Card>
       )}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-8 w-full max-w-7xl">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-8 w-full max-w-[1600px]">
         <Card className="w-full z-10 order-2 lg:order-1">
             <CardHeader className="flex flex-row items-center justify-between border-b pb-4">
             <div className="flex items-center gap-4">
@@ -474,25 +584,148 @@ export default function TakeExamPage() {
             </div>
             </CardHeader>
             <CardContent className="pt-6">
-            <h2 className="text-xl md:text-2xl font-semibold mb-6">{currentQuestion.questionText}</h2>
             
-            <RadioGroup 
-                className="space-y-4"
-                onValueChange={(value) => {
-                    const newAnswers = [...answers];
-                    newAnswers[currentQuestionIndex] = value;
-                    setAnswers(newAnswers);
-                }}
-                value={answers[currentQuestionIndex] || ''}
-                disabled={!hasCameraPermission || isSubmitting}
-            >
-                {currentQuestion.options.map((option, index) => (
-                <div key={index} className="flex items-center space-x-2 p-4 border rounded-lg transition-colors has-[:checked]:bg-primary/10 has-[:checked]:border-primary">
-                    <RadioGroupItem value={option} id={`option-${index}`} />
-                    <Label htmlFor={`option-${index}`} className="text-base w-full cursor-pointer">{option}</Label>
-                </div>
-                ))}
-            </RadioGroup>
+            {(!currentQuestion.type || currentQuestion.type === 'mcq') ? (
+              <>
+                <h2 className="text-xl md:text-2xl font-semibold mb-6">{currentQuestion.questionText}</h2>
+                <RadioGroup 
+                    className="space-y-4"
+                    onValueChange={(value) => {
+                        const newAnswers = [...answers];
+                        newAnswers[currentQuestionIndex] = value;
+                        setAnswers(newAnswers);
+                    }}
+                    value={answers[currentQuestionIndex] || ''}
+                    disabled={!hasCameraPermission || isSubmitting}
+                >
+                    {currentQuestion.options?.map((option, index) => (
+                    <div key={index} className="flex items-center space-x-2 p-4 border rounded-lg transition-colors has-[:checked]:bg-primary/10 has-[:checked]:border-primary">
+                        <RadioGroupItem value={option} id={`option-${index}`} />
+                        <Label htmlFor={`option-${index}`} className="text-base w-full cursor-pointer">{option}</Label>
+                    </div>
+                    ))}
+                </RadioGroup>
+              </>
+            ) : (
+              <PanelGroup direction="horizontal" orientation="horizontal" className="min-h-[75vh] max-h-[75vh] rounded-lg border w-full overflow-hidden" key="layout-outer-horizontal">
+                <Panel defaultSize={40} minSize={20} className="space-y-4 overflow-y-auto p-4 bg-background">
+                  <h2 className="text-xl font-bold">{currentQuestion.questionText}</h2>
+                  <div className="prose prose-sm dark:prose-invert">
+                    <p className="whitespace-pre-wrap">{currentQuestion.problemStatement}</p>
+                  </div>
+                  <div className="space-y-2 mt-4">
+                    <h3 className="font-semibold text-sm">Sample Input:</h3>
+                    <pre className="bg-muted p-2 rounded-md text-xs whitespace-pre-wrap font-mono">{currentQuestion.sampleInput || 'None'}</pre>
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="font-semibold text-sm">Expected Output:</h3>
+                    <pre className="bg-muted p-2 rounded-md text-xs whitespace-pre-wrap font-mono">{currentQuestion.sampleOutput || 'None'}</pre>
+                  </div>
+                </Panel>
+                <PanelResizeHandle className="w-2 bg-muted hover:bg-brand-primary/20 transition-colors cursor-col-resize flex flex-col items-center justify-center">
+                  <div className="h-8 w-1 bg-muted-foreground/30 rounded-full" />
+                </PanelResizeHandle>
+                <Panel defaultSize={60} minSize={30} className="flex flex-col bg-background">
+                  <div className="bg-muted p-2 flex justify-between items-center border-b">
+                    <select 
+                      className="bg-background text-sm border rounded px-2 py-1"
+                      value={selectedLanguage}
+                      onChange={(e) => setSelectedLanguage(Number(e.target.value))}
+                    >
+                      <option value={63}>JavaScript (Node.js)</option>
+                      <option value={71}>Python (3.8.1)</option>
+                      <option value={54}>C++ (GCC 9.2.0)</option>
+                      <option value={62}>Java (OpenJDK 13.0.1)</option>
+                    </select>
+                    <Button size="sm" onClick={runCode} disabled={isExecuting || !hasCameraPermission}>
+                      <Play className="h-4 w-4 mr-1" />
+                      {isExecuting ? 'Running...' : 'Run Code'}
+                    </Button>
+                  </div>
+                  <PanelGroup direction="vertical" orientation="vertical" className="flex-1 w-full" key="layout-inner-vertical">
+                    <Panel defaultSize={testCaseResults ? 55 : 100} minSize={20} className="flex flex-col">
+                      <div className="flex-1 h-full">
+                        <Editor
+                          height="100%"
+                          defaultLanguage="javascript"
+                          language={selectedLanguage === 63 ? 'javascript' : selectedLanguage === 71 ? 'python' : selectedLanguage === 54 ? 'cpp' : 'java'}
+                          theme="vs-dark"
+                          value={answers[currentQuestionIndex] || currentQuestion.starterCode || ''}
+                          onChange={(value) => {
+                            const newAnswers = [...answers];
+                            newAnswers[currentQuestionIndex] = value || '';
+                            setAnswers(newAnswers);
+                          }}
+                          options={{ minimap: { enabled: false }, fontSize: 14 }}
+                        />
+                      </div>
+                    </Panel>
+                    {testCaseResults && (
+                      <>
+                        <PanelResizeHandle className="h-2 bg-muted hover:bg-brand-primary/20 transition-colors cursor-row-resize flex items-center justify-center">
+                          <div className="w-8 h-1 bg-muted-foreground/30 rounded-full" />
+                        </PanelResizeHandle>
+                        <Panel defaultSize={45} minSize={20} className="bg-[#1a1a1a] dark:bg-[#1a1a1a] text-white flex flex-col">
+                          <div className="p-4 overflow-y-auto flex-1 flex flex-col gap-4">
+                            {/* Overall Status */}
+                            <div className="flex items-center gap-4">
+                              <h3 className={cn("text-2xl font-bold tracking-tight", testCaseResults.every(r => r.passed) ? "text-green-500" : "text-red-500")}>
+                                {testCaseResults.every(r => r.passed) ? "Accepted" : "Wrong Answer"}
+                              </h3>
+                            </div>
+
+                            {/* Test Case Tabs */}
+                            <div className="flex flex-wrap gap-2">
+                              {testCaseResults.map((tc, idx) => (
+                                <button
+                                  key={idx}
+                                  onClick={() => setSelectedTestCase(idx)}
+                                  className={cn(
+                                    "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200",
+                                    selectedTestCase === idx 
+                                      ? "bg-[#333333] text-white" 
+                                      : "hover:bg-[#2a2a2a] text-gray-400"
+                                  )}
+                                >
+                                  <div className={cn("w-1.5 h-1.5 rounded-full", tc.passed ? "bg-green-500" : "bg-red-500")} />
+                                  Case {idx + 1}
+                                </button>
+                              ))}
+                            </div>
+
+                            {/* Selected Test Case Details */}
+                            {testCaseResults[selectedTestCase] && (
+                              <div className="flex flex-col gap-5 mt-2">
+                                <div>
+                                  <div className="text-sm font-semibold text-gray-400 mb-2">Input</div>
+                                  <div className="bg-[#2a2a2a] border border-[#333333] rounded-lg p-3 font-mono text-sm whitespace-pre-wrap text-gray-200">
+                                    {testCaseResults[selectedTestCase].input || '(empty)'}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="text-sm font-semibold text-gray-400 mb-2">Output</div>
+                                  <div className="bg-[#2a2a2a] border border-[#333333] rounded-lg p-3 font-mono text-sm whitespace-pre-wrap text-gray-200">
+                                    {testCaseResults[selectedTestCase].actualOutput || '(empty)'}
+                                  </div>
+                                </div>
+                                {!testCaseResults[selectedTestCase].passed && testCaseResults[selectedTestCase].expectedOutput && (
+                                  <div>
+                                    <div className="text-sm font-semibold text-gray-400 mb-2">Expected</div>
+                                    <div className="bg-[#2a2a2a] border border-[#333333] rounded-lg p-3 font-mono text-sm whitespace-pre-wrap text-gray-200">
+                                      {testCaseResults[selectedTestCase].expectedOutput}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </Panel>
+                      </>
+                    )}
+                  </PanelGroup>
+                </Panel>
+              </PanelGroup>
+            )}
             </CardContent>
              <CardFooter className="flex justify-between border-t pt-4">
                 <Button onClick={handlePrev} disabled={currentQuestionIndex === 0 || isSubmitting}>

@@ -33,6 +33,7 @@ import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useAuth } from '@/context/AuthContext';
 import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
 
 export default function DashboardLayout({
   children,
@@ -221,6 +222,7 @@ export default function DashboardLayout({
           <div className="w-full flex-1">
              {/* Can add search here if needed */}
           </div>
+          <ThemeToggle />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="secondary" size="icon" className="rounded-full">

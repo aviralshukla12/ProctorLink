@@ -9,6 +9,7 @@ import { signOut } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
 import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
 import { useEffect } from 'react';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
 
 export default function StudentLayout({ children }: { children: React.ReactNode }) {
   const { user, userRole } = useAuth();
@@ -65,6 +66,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
           </Link>
           
           <nav className="flex items-center gap-4">
+            <ThemeToggle />
             <Link href="/student/dashboard">
               <Button variant="ghost" size="sm">My Exams</Button>
             </Link>

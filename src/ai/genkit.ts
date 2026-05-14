@@ -8,7 +8,7 @@ export const ai = genkit({
       baseURL: 'https://api.groq.com/openai/v1',
       models: [
         {
-          name: 'llama-3.3-70b-versatile',
+          name: 'llama-3.1-8b-instant',
           info: {
             label: 'Groq LLaMA 3.3 70B',
             supports: {

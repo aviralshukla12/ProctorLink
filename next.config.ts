@@ -1,5 +1,4 @@
 import type {NextConfig} from 'next';
-
 const nextConfig: NextConfig = {
   /* config options here */
   typescript: {
@@ -25,19 +24,23 @@ const nextConfig: NextConfig = {
       }
     ],
   },
-  // Transpile LangChain packages to handle ESM properly
   transpilePackages: ['@langchain/core', '@langchain/google-genai'],
   webpack: (config, { isServer }) => {
-    // Ensure proper module resolution for server-side packages
     if (isServer) {
       config.resolve.extensionAlias = {
         '.js': ['.js', '.ts', '.tsx'],
         '.jsx': ['.jsx', '.tsx'],
       };
     }
-    
+
+    // Fix missing OpenTelemetry peer dependencies
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@opentelemetry/winston-transport': false,
+      '@opentelemetry/exporter-jaeger': false,
+    };
+
     return config;
   },
 };
-
 export default nextConfig;

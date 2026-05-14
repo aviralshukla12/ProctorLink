@@ -215,7 +215,7 @@ Answer questions based on the resume content. Be helpful, specific, and actionab
 
   const client = getGroqClient();
   const chatCompletion = await client.chat.completions.create({
-    model: 'llama-3.3-70b-versatile',
+    model: 'llama-3.1-8b-instant',
     messages,
     temperature: 0.7,
     max_tokens: 4096,

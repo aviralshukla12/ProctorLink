@@ -142,7 +142,7 @@ Be constructive, specific, and encouraging. Format your response in clear sectio
 
   const client = getGroqClient();
   const chatCompletion = await client.chat.completions.create({
-    model: 'llama-3.3-70b-versatile',
+    model: 'llama-3.1-8b-instant',
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: `Please review this resume (1-3 pages):\n\n${textToReview}` },

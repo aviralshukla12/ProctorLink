@@ -83,7 +83,7 @@ The JSON must have this exact structure:
 
   const chatCompletion = await client.chat.completions.create({
     // Using a fast model for instant responses
-    model: 'llama-3.3-70b-versatile',
+    model: 'llama-3.1-8b-instant',
     messages: [
       { role: 'system', content: systemPrompt },
     ],
